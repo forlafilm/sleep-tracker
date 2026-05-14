@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Tracker | Tinnapat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1; --primary-dark: #4f46e5;
+            --bg: #f1f5f9; --card: #ffffff;
+            --text-main: #1e293b; --text-sub: #64748b;
+        }
+        * { box-sizing: border-box; transition: all 0.2s ease; }
+        body { 
+            font-family: 'Inter', 'Sarabun', sans-serif; 
+            background-color: var(--bg); color: var(--text-main);
+            margin: 0; padding: 15px; 
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        
+        .app-header { padding: 15px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .profile h1 { font-size: 1.4rem; margin: 0; color: var(--primary); }
+        .profile p { font-size: 0.9rem; color: var(--text-sub); margin: 5px 0 0; }
+
+        /* Input Section - แก้ไขปัญหาช่องขี่กัน */
+        .card-input { 
+            background: var(--card); border-radius: 16px; padding: 20px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-bottom: 20px;
+        }
+        .grid-inputs { 
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+        }
+        /* สำหรับหน้าจอมือถือให้เรียง 1 คอลัมน์ */
+        @media (max-width: 500px) { .grid-inputs { grid-template-columns: 1fr; } }
+
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        .input-group label { font-size: 0.75rem; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.05em; }
+        input, select { 
+            border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px;
+            font-size: 1rem; width: 100%; outline: none; background: #fff;
+        }
+        input:focus { border-color: var(--primary); background: #fdfdff; }
+        
+        .btn-submit { 
+            grid-column: 1 / -1; background: var(--primary); color: white;
+            border: none; border-radius: 10px; padding: 15px; font-weight: 600; font-size: 1rem;
+            cursor: pointer; margin-top: 10px; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
+        }
+        .btn-submit:active { transform: scale(0.98); }
+
+        /* Dashboard Layout */
+        .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .card { background: var(--card); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        
+        /* สรุปโดย Gemini - ปรับให้สวยและเด่น */
+        .gemini-card { 
+            background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); 
+            border-left: 6px solid var(--primary);
+        }
+        .gemini-card h3 { color: var(--primary); margin-top: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+        .gemini-card h3::before { content: '✨'; }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
+        .stat-item { background: #f8fafc; padding: 15px; border-radius: 12px; text-align: center; }
+        .stat-label { font-size: 0.7rem; color: var(--text-sub); text-transform: uppercase; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-top: 5px; }
+
+        .chart-container { height: 250px; margin-top: 10px; }
+        h3 { font-size: 0.95rem; color: var(--text-main); margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="app-header">
+        <div class="profile">
+            <h1>Sleep Tracker</h1>
+            <p>สวัสดีครับคุณฟิล์ม (Tinnapat)</p>
+        </div>
+    </header>
+
+    <section class="card-input">
+        <div class="grid-inputs">
+            <div class="input-group">
+                <label>วันที่บันทึก</label>
+                <div style="display:flex; gap:8px">
+                    <select id="day"></select>
+                    <select id="month"></select>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>Sleep Heart Rate (BPM)</label>
+                <input type="number" id="heartRate" placeholder="เช่น 65" value="65">
+            </div>
+            <div class="input-group">
+                <label>เวลาเข้านอน (Bedtime)</label>
+                <input type="time" id="bedTime" value="23:00">
+            </div>
+            <div class="input-group">
+                <label>เวลาตื่น (Wake up)</label>
+                <input type="time" id="wakeTime" value="07:00">
+            </div>
+            <button class="btn-submit" onclick="submitData()">บันทึกข้อมูลการนอน</button>
+        </div>
+    </section>
+
+    <main class="dashboard-grid">
+        <!-- สรุปโดย Gemini -->
+        <div class="card gemini-card">
+            <h3>ผลวิเคราะห์โดย Gemini</h3>
+            <p id="analysisText" style="font-size: 0.95rem; line-height: 1.6; color: #334155;">
+                กำลังประมวลผลข้อมูลล่าสุดของคุณฟิล์ม...
+            </p>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-label">เฉลี่ยเดือนนี้</div>
+                    <div class="stat-value" id="avgSleep">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">7 วันล่าสุด</div>
+                    <div id="recentList" style="font-size: 0.8rem; text-align: left; color: var(--text-sub);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>แนวโน้มจำนวนชั่วโมงนอน (7 วัน)</h3>
+            <div class="chart-container"><canvas id="sleepChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <h3>อัตราการเต้นหัวใจขณะนอน (7 วัน)</h3>
+            <div class="chart-container"><canvas id="hrChart"></canvas></div>
+        </div>
+    </main>
+</div>
+
+<script>
+    // ใส่ URL ของฟิล์มที่นี่ครับ
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUDVrRbJ4Io_mTMhub7ycD9hB3___X2gbJSDFEGTyxVkZD-arJRRmX6ycrJYS49kHK/exec";
+
+    // Setup Dropdowns
+    const now = new Date();
+    for(let i=1; i<=31; i++) document.getElementById('day').innerHTML += `<option value="${i}" ${i==now.getDate()?'selected':''}>${i}</option>`;
+    const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    months.forEach((m, i) => document.getElementById('month').innerHTML += `<option value="${i+1}" ${i+1==now.getMonth()+1?'selected':''}>${m}</option>`);
+
+    async function submitData() {
+        const bed = document.getElementById('bedTime').value;
+        const wake = document.getElementById('wakeTime').value;
+        let [bH, bM] = bed.split(':').map(Number);
+        let [wH, wM] = wake.split(':').map(Number);
+        let diff = (wH + wM/60) - (bH + bM/60);
+        if(diff < 0) diff += 24;
+        
+        const data = {
+            day: document.getElementById('day').value,
+            month: document.getElementById('month').value,
+            year: now.getFullYear(),
+            hours: Math.floor(diff),
+            minutes: Math.round((diff % 1) * 60),
+            heartRate: document.getElementById('heartRate').value,
+            bedTime: bed,
+            wakeTime: wake
+        };
+
+        const btn = document.querySelector('.btn-submit');
+        btn.innerText = "กำลังบันทึกข้อมูล..."; btn.disabled = true;
+
+        try {
+            await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+            alert("บันทึกสำเร็จแล้วครับฟิล์ม!"); 
+            location.reload();
+        } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); btn.innerText = "บันทึกข้อมูลการนอน"; btn.disabled = false; }
+    }
+
+    async function loadData() {
+        try {
+            const resp = await fetch(WEB_APP_URL);
+            const rows = await resp.json();
+            if (rows.length <= 1) {
+                document.getElementById('analysisText').innerText = "ยังไม่มีข้อมูลบันทึกในระบบครับ เริ่มบันทึกวันนี้ได้เลย!";
+                return;
+            }
+            const cleanData = rows.slice(1);
+
+            // 1. เฉลี่ยและวิเคราะห์
+            const avg = cleanData.reduce((a, b) => a + parseFloat(b[3]) + parseFloat(b[4])/60, 0) / cleanData.length;
+            document.getElementById('avgSleep').innerText = avg.toFixed(1) + " ชม.";
+            
+            let analysis = `จากการบันทึก คุณฟิล์มนอนเฉลี่ย ${avg.toFixed(1)} ชม. `;
+            analysis += avg >= 7 ? "อยู่ในเกณฑ์ที่ดีมากครับ รักษาระดับการนอนนี้ไว้เพื่อให้สมองแจ่มใสนะครับ!" : "ช่วงนี้ดูเหมือนจะพักผ่อนน้อยกว่า 7 ชม. หากเป็นไปได้ ลองขยับเวลาเข้านอนให้เร็วขึ้นอีกนิดนะครับ";
+            document.getElementById('analysisText').innerText = analysis;
+
+            // 2. แสดงลิสต์สั้นๆ
+            const last5 = cleanData.slice(-3).reverse();
+            document.getElementById('recentList').innerHTML = last5.map(r => `<div>• วันที่ ${r[0]}/${r[1]}: ${r[3]}ชม. ${r[4]}น.</div>`).join('');
+
+            // 3. กราฟ
+            const chartData = cleanData.slice(-7);
+            const labels = chartData.map(r => `${r[0]}/${r[1]}`);
+            
+            new Chart(document.getElementById('sleepChart'), {
+                type: 'line',
+                data: { labels, datasets: [{ label: 'ชั่วโมง', data: chartData.map(r => parseFloat(r[3]) + parseFloat(r[4])/60), borderColor: '#6366f1', tension: 0.4, fill: true, backgroundColor: 'rgba(99, 102, 241, 0.1)' }] },
+                options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+
+            new Chart(document.getElementById('hrChart'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'BPM', data: chartData.map(r => r[5]), backgroundColor: '#f43f5e', borderRadius: 6 }] },
+                options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        } catch (e) { console.error(e); }
+    }
+    loadData();
+</script>
+
+</body>
+</html>
