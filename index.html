@@ -24,7 +24,7 @@
         .profile h1 { font-size: 1.4rem; margin: 0; color: var(--primary); }
         .profile p { font-size: 0.9rem; color: var(--text-sub); margin: 5px 0 0; }
 
-        /* Input Section - แก้ไขปัญหาช่องขี่กัน */
+        /* Input Section */
         .card-input { 
             background: var(--card); border-radius: 16px; padding: 20px;
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-bottom: 20px;
@@ -82,7 +82,6 @@
         </div>
     </header>
 
-    <!-- ส่วนกรอกข้อมูล -->
     <section class="card-input">
         <div class="grid-inputs">
             <div class="input-group">
@@ -108,7 +107,6 @@
         </div>
     </section>
 
-    <!-- ส่วนแสดงผล -->
     <main class="dashboard-grid">
         <div class="card gemini-card">
             <h3>ผลวิเคราะห์โดย Gemini</h3>
@@ -191,16 +189,33 @@
         try {
             const resp = await fetch(WEB_APP_URL);
             const rows = await resp.json();
-            allData = rows.slice(1);
+            
+            // ดึงข้อมูลแถวและแปลงให้เรียงวันที่จากน้อยไปมาก
+            allData = rows.slice(1).map(r => {
+                return {
+                    day: parseInt(r[0]),
+                    month: parseInt(r[1]),
+                    year: parseInt(r[2]),
+                    hours: parseFloat(r[3]),
+                    minutes: parseFloat(r[4]),
+                    heartRate: parseInt(r[5]),
+                    raw: r
+                };
+            });
+
+            // --- ส่วนที่แก้ไขเพิ่ม: ระบบจัดเรียงลำดับวันที่อัตโนมัติ ---
+            allData.sort((a, b) => {
+                return new Date(a.year, a.month - 1, a.day) - new Date(b.year, b.month - 1, b.day);
+            });
+
             updateCharts('7'); 
         } catch (e) { 
             console.error(e);
-            document.getElementById('analysisText').innerText = "ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้ กรุณาเช็ค URL ครับ";
+            document.getElementById('analysisText').innerText = "ไม่สามารถโหลดข้อมูลได้ กรุณาเช็คการเชื่อมต่อครับ";
         }
     }
 
     function updateCharts(mode) {
-        // จัดการสถานะปุ่ม
         document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
         if(mode === '7') document.getElementById('btn7').classList.add('active');
         if(mode === '30') document.getElementById('btn30').classList.add('active');
@@ -209,7 +224,7 @@
         const monthSelect = document.getElementById('monthFilter').value;
 
         if (mode === 'month' && monthSelect) {
-            filtered = allData.filter(r => r[1] == monthSelect);
+            filtered = allData.filter(d => d.month == monthSelect);
             document.getElementById('sleepTitle').innerText = `ชั่วโมงนอน เดือน ${months[monthSelect-1]}`;
             document.getElementById('hrTitle').innerText = `HR เดือน ${months[monthSelect-1]}`;
         } else {
@@ -225,12 +240,12 @@
             return;
         }
 
-        const labels = filtered.map(r => `${r[0]}/${r[1]}`);
-        const sleepHours = filtered.map(r => parseFloat(r[3]) + parseFloat(r[4])/60);
-        const heartRates = filtered.map(r => r[5]);
+        const labels = filtered.map(d => `${d.day}/${d.month}`);
+        const sleepHours = filtered.map(d => d.hours + (d.minutes / 60));
+        const heartRates = filtered.map(d => d.heartRate);
 
         const avgS = sleepHours.reduce((a,b) => a+b, 0) / sleepHours.length;
-        const avgH = heartRates.reduce((a,b) => a+parseInt(b), 0) / heartRates.length;
+        const avgH = heartRates.reduce((a,b) => a+b, 0) / heartRates.length;
         
         document.getElementById('avgSleep').innerText = avgS.toFixed(1) + " ชม.";
         document.getElementById('avgHR').innerText = Math.round(avgH) + " BPM";
