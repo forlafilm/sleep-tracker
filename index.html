@@ -63,10 +63,12 @@
         }
         .btn-filter.active { background: var(--primary); color: white; }
 
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
-        .stat-item { background: #f8fafc; padding: 15px; border-radius: 12px; text-align: center; }
-        .stat-label { font-size: 0.7rem; color: var(--text-sub); text-transform: uppercase; }
-        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-top: 5px; }
+        /* ปรับสเกลตารางค่าเฉลี่ยให้รองรับ 4 กล่องข้อมูล */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
+        @media (min-width: 600px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+        .stat-item { background: #f8fafc; padding: 12px 8px; border-radius: 12px; text-align: center; }
+        .stat-label { font-size: 0.65rem; color: var(--text-sub); text-transform: uppercase; font-weight: 600; }
+        .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--primary); margin-top: 5px; }
 
         .chart-container { height: 260px; margin-top: 10px; position: relative; }
         h3 { font-size: 0.95rem; color: var(--text-main); margin-bottom: 15px; }
@@ -82,6 +84,7 @@
         </div>
     </header>
 
+    <!-- ส่วนกรอกข้อมูล -->
     <section class="card-input">
         <div class="grid-inputs">
             <div class="input-group">
@@ -107,6 +110,7 @@
         </div>
     </section>
 
+    <!-- ส่วนแสดงผล -->
     <main class="dashboard-grid">
         <div class="card gemini-card">
             <h3>ผลวิเคราะห์โดย Gemini</h3>
@@ -120,6 +124,7 @@
                 </select>
             </div>
 
+            <!-- เพิ่มช่องแสดงเวลาเข้านอนเฉลี่ย และเวลาตื่นเฉลี่ยตามบรีฟ -->
             <div class="stat-grid">
                 <div class="stat-item">
                     <div class="stat-label">เวลานอนเฉลี่ย</div>
@@ -128,6 +133,14 @@
                 <div class="stat-item">
                     <div class="stat-label">HR เฉลี่ย</div>
                     <div class="stat-value" id="avgHR" style="color: #f43f5e;">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">เข้านอนเฉลี่ย</div>
+                    <div class="stat-value" id="avgBedtime" style="color: #4f46e5; font-size: 1.15rem;">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">เวลาตื่นเฉลี่ย</div>
+                    <div class="stat-value" id="avgWaketime" style="color: #0891b2; font-size: 1.15rem;">--</div>
                 </div>
             </div>
         </div>
@@ -149,7 +162,6 @@
     let allData = [];
     let sleepChartInstance, hrChartInstance;
 
-    // ตั้งค่าตัวเลือกวัน/เดือน
     const now = new Date();
     for(let i=1; i<=31; i++) document.getElementById('day').innerHTML += `<option value="${i}" ${i==now.getDate()?'selected':''}>${i}</option>`;
     const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -190,7 +202,6 @@
             const resp = await fetch(WEB_APP_URL);
             const rows = await resp.json();
             
-            // ดึงข้อมูลแถวและแปลงให้เรียงวันที่จากน้อยไปมาก
             allData = rows.slice(1).map(r => {
                 return {
                     day: parseInt(r[0]),
@@ -199,11 +210,12 @@
                     hours: parseFloat(r[3]),
                     minutes: parseFloat(r[4]),
                     heartRate: parseInt(r[5]),
+                    bedTime: r[6] || "23:00",
+                    wakeTime: r[7] || "07:00",
                     raw: r
                 };
             });
 
-            // --- ส่วนที่แก้ไขเพิ่ม: ระบบจัดเรียงลำดับวันที่อัตโนมัติ ---
             allData.sort((a, b) => {
                 return new Date(a.year, a.month - 1, a.day) - new Date(b.year, b.month - 1, b.day);
             });
@@ -214,6 +226,30 @@
             document.getElementById('analysisText').innerText = "ไม่สามารถโหลดข้อมูลได้ กรุณาเช็คการเชื่อมต่อครับ";
         }
     }
+
+    // ฟังก์ชันคำนวณเวลาเฉลี่ยแบบรองรับการข้ามคืน (คลุมช่วงเที่ยงคืน)
+    document.addEventListener("DOMContentLoaded", function() {
+        window.calculateTimeAverage = function(timeArray, isBedtime = false) {
+            if (!timeArray || timeArray.length === 0) return "--:--";
+            let totalMinutes = 0;
+            timeArray.forEach(t => {
+                let [h, m] = t.split(':').map(Number);
+                let minutes = h * 60 + m;
+                if (isBedtime && h < 12) { 
+                    minutes += 24 * 60; // จัดการกรณีคนนอนหลังเที่ยงคืนให้สเกลไม่เพี้ยน
+                }
+                totalMinutes += minutes;
+            });
+            let avgMinutes = totalMinutes / timeArray.length;
+            if (isBedtime && avgMinutes >= 24 * 60) {
+                avgMinutes -= 24 * 60;
+            }
+            let avgH = Math.floor(avgMinutes / 60);
+            let avgM = Math.round(avgMinutes % 60);
+            if (avgM === 60) { avgM = 0; avgH += 1; }
+            return `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`;
+        }
+    });
 
     function updateCharts(mode) {
         document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
@@ -243,22 +279,28 @@
         const labels = filtered.map(d => `${d.day}/${d.month}`);
         const sleepHours = filtered.map(d => d.hours + (d.minutes / 60));
         const heartRates = filtered.map(d => d.heartRate);
+        const bedTimes = filtered.map(d => d.bedTime);
+        const wakeTimes = filtered.map(d => d.wakeTime);
 
         const avgS = sleepHours.reduce((a,b) => a+b, 0) / sleepHours.length;
         const avgH = heartRates.reduce((a,b) => a+b, 0) / heartRates.length;
         
+        // แสดงผลค่าเฉลี่ย
         document.getElementById('avgSleep').innerText = avgS.toFixed(1) + " ชม.";
         document.getElementById('avgHR').innerText = Math.round(avgH) + " BPM";
+        document.getElementById('avgBedtime').innerText = calculateTimeAverage(bedTimes, true);
+        document.getElementById('avgWaketime').innerText = calculateTimeAverage(wakeTimes, false);
 
         let analysis = `คุณฟิล์มนอนเฉลี่ย ${avgS.toFixed(1)} ชม. `;
         analysis += avgS >= 7 ? "อยู่ในเกณฑ์ดีครับ!" : "ควรหาเวลานอนเพิ่มนะครับ";
         document.getElementById('analysisText').innerText = analysis;
 
-        renderChart('sleepChart', labels, sleepHours, '#6366f1', 'line');
-        renderChart('hrChart', labels, heartRates, '#f43f5e', 'bar');
+        // ปรับตามบรีฟ: เปลี่ยนกราฟ HR เป็นแบบ line และล็อกแกนต่ำสุดที่ 50
+        renderChart('sleepChart', labels, sleepHours, '#6366f1', 'line', 0);
+        renderChart('hrChart', labels, heartRates, '#f43f5e', 'line', 50);
     }
 
-    function renderChart(id, labels, data, color, type) {
+    function renderChart(id, labels, data, color, type, minGrad) {
         const ctx = document.getElementById(id);
         if (id === 'sleepChart' && sleepChartInstance) sleepChartInstance.destroy();
         if (id === 'hrChart' && hrChartInstance) hrChartInstance.destroy();
@@ -276,7 +318,12 @@
             options: { 
                 maintainAspectRatio: false, 
                 plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: id === 'sleepChart' } }
+                scales: { 
+                    y: { 
+                        min: minGrad,
+                        ticks: { stepSize: id === 'sleepChart' ? 1 : 5 }
+                    } 
+                }
             }
         };
 
