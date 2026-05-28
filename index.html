@@ -63,7 +63,6 @@
         }
         .btn-filter.active { background: var(--primary); color: white; }
 
-        /* ปรับสเกลตารางค่าเฉลี่ยให้รองรับ 4 กล่องข้อมูล */
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
         @media (min-width: 600px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
         .stat-item { background: #f8fafc; padding: 12px 8px; border-radius: 12px; text-align: center; }
@@ -84,7 +83,6 @@
         </div>
     </header>
 
-    <!-- ส่วนกรอกข้อมูล -->
     <section class="card-input">
         <div class="grid-inputs">
             <div class="input-group">
@@ -110,7 +108,6 @@
         </div>
     </section>
 
-    <!-- ส่วนแสดงผล -->
     <main class="dashboard-grid">
         <div class="card gemini-card">
             <h3>ผลวิเคราะห์โดย Gemini</h3>
@@ -124,7 +121,6 @@
                 </select>
             </div>
 
-            <!-- เพิ่มช่องแสดงเวลาเข้านอนเฉลี่ย และเวลาตื่นเฉลี่ยตามบรีฟ -->
             <div class="stat-grid">
                 <div class="stat-item">
                     <div class="stat-label">เวลานอนเฉลี่ย</div>
@@ -203,16 +199,23 @@
             const rows = await resp.json();
             
             allData = rows.slice(1).map(r => {
+                // ป้องกันข้อมูลพังกรณีค่าใน Google Sheets ในแถวนั้นๆ ว่างเปล่า
+                let bed = r[6] ? String(r[6]).trim() : "";
+                let wake = r[7] ? String(r[7]).trim() : "";
+                
+                // ถ้ารูปแบบเวลาไม่ใช่ HH:MM ให้ใส่ค่าเริ่มต้นไว้ก่อนเพื่อไม่ให้ระบบพัง
+                if(!bed.includes(':')) bed = "23:00";
+                if(!wake.includes(':')) wake = "07:00";
+
                 return {
                     day: parseInt(r[0]),
                     month: parseInt(r[1]),
                     year: parseInt(r[2]),
-                    hours: parseFloat(r[3]),
-                    minutes: parseFloat(r[4]),
-                    heartRate: parseInt(r[5]),
-                    bedTime: r[6] || "23:00",
-                    wakeTime: r[7] || "07:00",
-                    raw: r
+                    hours: parseFloat(r[3]) || 0,
+                    minutes: parseFloat(r[4]) || 0,
+                    heartRate: parseInt(r[5]) || 60,
+                    bedTime: bed,
+                    wakeTime: wake
                 };
             });
 
@@ -227,29 +230,43 @@
         }
     }
 
-    // ฟังก์ชันคำนวณเวลาเฉลี่ยแบบรองรับการข้ามคืน (คลุมช่วงเที่ยงคืน)
-    document.addEventListener("DOMContentLoaded", function() {
-        window.calculateTimeAverage = function(timeArray, isBedtime = false) {
-            if (!timeArray || timeArray.length === 0) return "--:--";
-            let totalMinutes = 0;
-            timeArray.forEach(t => {
-                let [h, m] = t.split(':').map(Number);
-                let minutes = h * 60 + m;
-                if (isBedtime && h < 12) { 
-                    minutes += 24 * 60; // จัดการกรณีคนนอนหลังเที่ยงคืนให้สเกลไม่เพี้ยน
-                }
-                totalMinutes += minutes;
-            });
-            let avgMinutes = totalMinutes / timeArray.length;
-            if (isBedtime && avgMinutes >= 24 * 60) {
-                avgMinutes -= 24 * 60;
+    // แก้ไขฟังก์ชันคำนวณเวลาเฉลี่ยให้ป้องกันค่า NaN ชัวร์ 100%
+    function calculateTimeAverage(timeArray, isBedtime = false) {
+        if (!timeArray || timeArray.length === 0) return "--:--";
+        
+        let totalMinutes = 0;
+        let validCount = 0;
+
+        timeArray.forEach(t => {
+            if (!t || !t.includes(':')) return;
+            let parts = t.split(':');
+            let h = parseInt(parts[0]);
+            let m = parseInt(parts[1]);
+            if (isNaN(h) || isNaN(m)) return;
+
+            let minutes = h * 60 + m;
+            // จัดการสเกลข้ามเที่ยงคืนสำหรับเวลานอน (ช่วง 18:00 ถึง 06:00 ของอีกวัน)
+            if (isBedtime && h < 12) { 
+                minutes += 24 * 60; 
             }
-            let avgH = Math.floor(avgMinutes / 60);
-            let avgM = Math.round(avgMinutes % 60);
-            if (avgM === 60) { avgM = 0; avgH += 1; }
-            return `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`;
+            totalMinutes += minutes;
+            validCount++;
+        });
+
+        if (validCount === 0) return "--:--";
+
+        let avgMinutes = totalMinutes / validCount;
+        if (isBedtime && avgMinutes >= 24 * 60) {
+            avgMinutes -= 24 * 60;
         }
-    });
+        
+        let avgH = Math.floor(avgMinutes / 60);
+        let avgM = Math.round(avgMinutes % 60);
+        if (avgM === 60) { avgM = 0; avgH += 1; }
+        if (avgH >= 24) avgH -= 24;
+
+        return `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`;
+    }
 
     function updateCharts(mode) {
         document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
@@ -285,7 +302,7 @@
         const avgS = sleepHours.reduce((a,b) => a+b, 0) / sleepHours.length;
         const avgH = heartRates.reduce((a,b) => a+b, 0) / heartRates.length;
         
-        // แสดงผลค่าเฉลี่ย
+        // แสดงผลค่าเฉลี่ยที่แก้บั๊ก NaN แล้ว
         document.getElementById('avgSleep').innerText = avgS.toFixed(1) + " ชม.";
         document.getElementById('avgHR').innerText = Math.round(avgH) + " BPM";
         document.getElementById('avgBedtime').innerText = calculateTimeAverage(bedTimes, true);
@@ -295,12 +312,12 @@
         analysis += avgS >= 7 ? "อยู่ในเกณฑ์ดีครับ!" : "ควรหาเวลานอนเพิ่มนะครับ";
         document.getElementById('analysisText').innerText = analysis;
 
-        // ปรับตามบรีฟ: เปลี่ยนกราฟ HR เป็นแบบ line และล็อกแกนต่ำสุดที่ 50
-        renderChart('sleepChart', labels, sleepHours, '#6366f1', 'line', 0);
-        renderChart('hrChart', labels, heartRates, '#f43f5e', 'line', 50);
+        // ปรับแก้สเกลตามบรีฟใหม่: HR ต่ำสุด 50 สูงสุด 80
+        renderChart('sleepChart', labels, sleepHours, '#6366f1', 'line', 0, null);
+        renderChart('hrChart', labels, heartRates, '#f43f5e', 'line', 50, 80);
     }
 
-    function renderChart(id, labels, data, color, type, minGrad) {
+    function renderChart(id, labels, data, color, type, minGrad, maxGrad) {
         const ctx = document.getElementById(id);
         if (id === 'sleepChart' && sleepChartInstance) sleepChartInstance.destroy();
         if (id === 'hrChart' && hrChartInstance) hrChartInstance.destroy();
@@ -321,6 +338,7 @@
                 scales: { 
                     y: { 
                         min: minGrad,
+                        max: maxGrad, // ล็อกค่าสูงสุดที่ 80 สำหรับ HR ตามที่บรีฟมาครับ
                         ticks: { stepSize: id === 'sleepChart' ? 1 : 5 }
                     } 
                 }
