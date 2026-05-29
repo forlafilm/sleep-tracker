@@ -246,27 +246,39 @@
         } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); btn.disabled = false; }
     }
 
+    // ฟังก์ชันช่วยแกะเวลาไม่ว่าจะถูกส่งมาเป็น Object, String หรือเศษเวลาตัวเลขจาก Google Sheets
+    function parseSheetsTime(rawVal) {
+        if (rawVal === undefined || rawVal === null || rawVal === '') return null;
+        
+        let str = String(rawVal).trim();
+        
+        // กรณีเจอฟอร์แมตระบุวันที่ยาวๆ เช่น ISO String ให้ดึงเฉพาะส่วนเวลามา
+        if (str.includes('T')) {
+            str = str.split('T')[1].substring(0, 5);
+        } else if (str.includes(' ') && (str.includes('-') || str.includes('/'))) {
+            // กรณีเป็น "YYYY-MM-DD HH:MM:SS"
+            let parts = str.split(' ');
+            if (parts[1]) str = parts[1].substring(0, 5);
+        }
+
+        // คลีนเอาแค่นาทีและชั่วโมง
+        if (str.includes(':')) {
+            let tokens = str.split(':');
+            let h = parseInt(tokens[0], 10);
+            let m = parseInt(tokens[1], 10);
+            if (!isNaN(h) && !isNaN(m)) {
+                return { h, m, totalMins: h * 60 + m };
+            }
+        }
+        return null;
+    }
+
     async function loadData() {
         try {
             const resp = await fetch(WEB_APP_URL);
             const rows = await resp.json();
             
             allData = rows.slice(1).map(r => {
-                // ดึงข้อมูลมาเป็นข้อความดิบๆ ก่อนเพื่อความชัวร์
-                let rawBed = r[6] !== undefined && r[6] !== null ? String(r[6]).trim() : "23:00";
-                let rawWake = r[7] !== undefined && r[7] !== null ? String(r[7]).trim() : "07:00";
-
-                // จัดการฟอร์แมตกรณีที่ถูกส่งมาเป็นแบบ "1:00" ให้เป็น "01:00" หรือตัดเศษวินาทีออกทิ้ง
-                function cleanTime(timeStr) {
-                    if (!timeStr.includes(':')) return "00:00";
-                    let parts = timeStr.split(':');
-                    let h = parseInt(parts[0], 10);
-                    let m = parseInt(parts[1], 10);
-                    if (isNaN(h)) h = 0;
-                    if (isNaN(m)) m = 0;
-                    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                }
-
                 return {
                     day: parseInt(r[0], 10),
                     month: parseInt(r[1], 10),
@@ -274,8 +286,8 @@
                     hours: parseFloat(r[3]) || 0,
                     minutes: parseFloat(r[4]) || 0,
                     heartRate: parseInt(r[5], 10) || 60,
-                    bedTime: cleanTime(rawBed),
-                    wakeTime: cleanTime(rawWake)
+                    rawBed: r[6],
+                    rawWake: r[7]
                 };
             });
 
@@ -290,32 +302,36 @@
         }
     }
 
-    // ฟังก์ชันคำนวณหาค่าเฉลี่ยของเวลาโดยแปลงเป็นนาทีทั้งหมดอย่างสมบูรณ์
-    function calculateTimeAverage(timeArray, isBedtime = false) {
-        if (!timeArray || timeArray.length === 0) return "--:--";
+    // ฟังก์ชันคำนวณหาค่าเฉลี่ยแบบล้างบั๊กตัวเลขทวีคูณ
+    function calculateTimeAverage(dataArray, isBedtime = false) {
         let totalMinutes = 0;
         let count = 0;
 
-        timeArray.forEach(t => {
-            if(!t || !t.includes(':')) return;
-            let parts = t.split(':');
-            let h = parseInt(parts[0], 10);
-            let m = parseInt(parts[1], 10);
-            if(isNaN(h) || isNaN(m)) return;
-
-            let mins = h * 60 + m;
-            // จัดการกรณีคนเข้านอนหลังเที่ยงคืนจนถึงเช้า (เช่น นอนตอนตี 1 ให้ปัดสเกลไปรวมกับช่วงดึก)
-            if (isBedtime && h < 12) { mins += 24 * 60; }
-            totalMinutes += mins;
-            count++;
+        dataArray.forEach(d => {
+            let rawVal = isBedtime ? d.rawBed : d.rawWake;
+            let parsed = parseSheetsTime(rawVal);
+            
+            if (parsed) {
+                let mins = parsed.totalMins;
+                // ถ้าเป็นเวลาเข้านอนช่วงหัวค่ำถึงก่อนเที่ยงวัน (ปัดสเกลข้ามคืนสำหรับคนนอนดึก)
+                if (isBedtime && parsed.h < 12) {
+                    mins += 24 * 60;
+                }
+                totalMinutes += mins;
+                count++;
+            }
         });
 
-        if(count === 0) return "--:--";
+        if (count === 0) return "--:--";
+        
         let avgMins = totalMinutes / count;
-        if (isBedtime && avgMins >= 24 * 60) { avgMins -= 24 * 60; }
+        if (isBedtime && avgMins >= 24 * 60) {
+            avgMins -= 24 * 60;
+        }
 
         let finalH = Math.floor(avgMins / 60);
         let finalM = Math.round(avgMins % 60);
+        
         if (finalM === 60) { finalM = 0; finalH += 1; }
         if (finalH >= 24) finalH -= 24;
 
@@ -350,16 +366,16 @@
         const labels = filtered.map(d => `${d.day}/${d.month}`);
         const sleepHours = filtered.map(d => d.hours + (d.minutes / 60));
         const heartRates = filtered.map(d => d.heartRate);
-        const bedTimes = filtered.map(d => d.bedTime);
-        const wakeTimes = filtered.map(d => d.wakeTime);
 
         const avgS = sleepHours.reduce((a,b) => a+b, 0) / sleepHours.length;
         const avgH = heartRates.reduce((a,b) => a+b, 0) / heartRates.length;
         
         document.getElementById('avgSleep').innerText = avgS.toFixed(1) + " ชม.";
         document.getElementById('avgHR').innerText = Math.round(avgH) + " BPM";
-        document.getElementById('avgBedtime').innerText = calculateTimeAverage(bedTimes, true);
-        document.getElementById('avgWaketime').innerText = calculateTimeAverage(wakeTimes, false);
+        
+        // ส่ง Array ข้อมูลที่คัดกรองแล้วไปคำนวณแบบสเกลเดี่ยว
+        document.getElementById('avgBedtime').innerText = calculateTimeAverage(filtered, true);
+        document.getElementById('avgWaketime').innerText = calculateTimeAverage(filtered, false);
 
         let analysis = `คุณฟิล์มนอนเฉลี่ย ${avgS.toFixed(1)} ชม. `;
         analysis += avgS >= 7 ? "อยู่ในเกณฑ์ดีครับ!" : "ควรหาเวลานอนเพิ่มนะครับ";
@@ -371,7 +387,6 @@
 
         renderChart('sleepChart', labels, sleepHours, '#6366f1', 'line', 0, null, 1, gridColor, textColor);
         
-        // สเกลแกน Y แบบละเอียดขยับทีละ 1 (Min-5 / Max+5)
         const minHR = Math.min(...heartRates);
         const maxHR = Math.max(...heartRates);
         const dynamicMin = minHR - 5;
