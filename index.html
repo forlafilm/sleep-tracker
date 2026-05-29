@@ -166,6 +166,12 @@
             <div class="chart-container"><canvas id="sleepChart"></canvas></div>
         </div>
 
+        <!-- กราฟจำนวนชั่วโมงนอน (ใหม่) -->
+        <div class="card">
+            <h3 id="hoursTitle">จำนวนชั่วโมงนอน (Sleep Duration)</h3>
+            <div class="chart-container"><canvas id="hoursChart"></canvas></div>
+        </div>
+
         <div class="card">
             <h3 id="hrTitle">กราฟอัตราการเต้นหัวใจ (Heart Rate)</h3>
             <div class="chart-container"><canvas id="hrChart"></canvas></div>
@@ -176,7 +182,7 @@
 <script>
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUDVrRbJ4Io_mTMhub7ycD9hB3___X2gbJSDFEGTyxVkZD-arJRRmX6ycrJYS49kHK/exec";
     let allData = [];
-    let sleepChartInstance, hrChartInstance;
+    let sleepChartInstance, hoursChartInstance, hrChartInstance;
 
     function toggleTheme() {
         const currentTheme = document.documentElement.getAttribute('data-theme');
@@ -189,24 +195,24 @@
             document.getElementById('themeBtn').innerHTML = "☀️ Light Mode";
             localStorage.setItem('theme', 'dark');
         }
-        if(allData.length > 0) {
+        if (allData.length > 0) {
             const activeBtn = document.querySelector('.btn-filter.active');
             const monthSelect = document.getElementById('monthFilter').value;
-            if(monthSelect) updateCharts('month');
-            else if(activeBtn) updateCharts(activeBtn.id.replace('btn',''));
+            if (monthSelect) updateCharts('month');
+            else if (activeBtn) updateCharts(activeBtn.id.replace('btn', ''));
         }
     }
 
-    if(localStorage.getItem('theme') === 'dark') {
+    if (localStorage.getItem('theme') === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
         document.getElementById('themeBtn').innerHTML = "☀️ Light Mode";
     }
 
     const now = new Date();
-    for(let i=1; i<=31; i++) document.getElementById('day').innerHTML += `<option value="${i}" ${i==now.getDate()?'selected':''}>${i}</option>`;
+    for (let i = 1; i <= 31; i++) document.getElementById('day').innerHTML += `<option value="${i}" ${i == now.getDate() ? 'selected' : ''}>${i}</option>`;
     const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     months.forEach((m, i) => {
-        document.getElementById('month').innerHTML += `<option value="${i+1}" ${i+1==now.getMonth()+1?'selected':''}>${m}</option>`;
+        document.getElementById('month').innerHTML += `<option value="${i+1}" ${i+1 == now.getMonth()+1 ? 'selected' : ''}>${m}</option>`;
         document.getElementById('monthFilter').innerHTML += `<option value="${i+1}">${m}</option>`;
     });
 
@@ -215,9 +221,9 @@
         const wake = document.getElementById('wakeTime').value;
         let [bH, bM] = bed.split(':').map(Number);
         let [wH, wM] = wake.split(':').map(Number);
-        let diff = (wH + wM/60) - (bH + bM/60);
-        if(diff < 0) diff += 24;
-        
+        let diff = (wH + wM / 60) - (bH + bM / 60);
+        if (diff < 0) diff += 24;
+
         const data = {
             day: document.getElementById('day').value,
             month: document.getElementById('month').value,
@@ -232,7 +238,7 @@
         btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
         try {
             await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
-            alert("บันทึกเรียบร้อยแล้วครับฟิล์ม!"); 
+            alert("บันทึกเรียบร้อยแล้วครับฟิล์ม!");
             location.reload();
         } catch (e) { alert("เกิดข้อผิดพลาด: " + e.message); btn.disabled = false; }
     }
@@ -258,7 +264,7 @@
         try {
             const resp = await fetch(WEB_APP_URL);
             const rows = await resp.json();
-            
+
             allData = rows.slice(1).map(r => {
                 return {
                     day: parseInt(r[0], 10),
@@ -276,8 +282,8 @@
                 return new Date(a.year, a.month - 1, a.day) - new Date(b.year, b.month - 1, b.day);
             });
 
-            updateCharts('7'); 
-        } catch (e) { 
+            updateCharts('7');
+        } catch (e) {
             console.error(e);
             document.getElementById('analysisText').innerText = "ไม่สามารถโหลดข้อมูลได้ กรุณาเช็คการเชื่อมต่อครับ";
         }
@@ -285,8 +291,8 @@
 
     function updateCharts(mode) {
         document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
-        if(mode === '7') document.getElementById('btn7').classList.add('active');
-        if(mode === '30') document.getElementById('btn30').classList.add('active');
+        if (mode === '7') document.getElementById('btn7').classList.add('active');
+        if (mode === '30') document.getElementById('btn30').classList.add('active');
 
         let filtered = [];
         const monthSelect = document.getElementById('monthFilter').value;
@@ -294,11 +300,13 @@
         if (mode === 'month' && monthSelect) {
             filtered = allData.filter(d => d.month == monthSelect);
             document.getElementById('sleepTitle').innerText = `ช่วงเวลาการนอน เดือน ${months[monthSelect-1]}`;
+            document.getElementById('hoursTitle').innerText = `จำนวนชั่วโมงนอน เดือน ${months[monthSelect-1]}`;
             document.getElementById('hrTitle').innerText = `HR เดือน ${months[monthSelect-1]}`;
         } else {
             const days = parseInt(mode, 10);
             filtered = allData.slice(-days);
             document.getElementById('sleepTitle').innerText = `ช่วงเวลาการนอน (${days} วันล่าสุด)`;
+            document.getElementById('hoursTitle').innerText = `จำนวนชั่วโมงนอน (${days} วันล่าสุด)`;
             document.getElementById('hrTitle').innerText = `HR (${days} วันล่าสุด)`;
             document.getElementById('monthFilter').value = "";
         }
@@ -309,55 +317,75 @@
         }
 
         const labels = filtered.map(d => `${d.day}/${d.month}`);
-        const sleepHours = filtered.map(d => d.hours + (d.minutes / 60));
         const heartRates = filtered.map(d => d.heartRate);
 
-        // คำนวณค่าช่วงเวลาสำหรับ Floating Bar Chart (ยึดตามสเกล 24 ชม. โดยให้ 12:00 น. เที่ยงวันเป็นจุดเริ่ม)
+        // คำนวณชั่วโมงนอนจาก rawBed/rawWake โดยตรง (แม่นกว่าใช้ค่า hours/minutes จาก sheet)
+        const sleepHours = filtered.map(d => {
+            let bedParsed = parseSheetsTime(d.rawBed);
+            let wakeParsed = parseSheetsTime(d.rawWake);
+            if (bedParsed && wakeParsed) {
+                let bedVal = bedParsed.h + bedParsed.m / 60;
+                let wakeVal = wakeParsed.h + wakeParsed.m / 60;
+                let diff = wakeVal - bedVal;
+                if (diff <= 0) diff += 24;
+                return parseFloat(diff.toFixed(2));
+            }
+            // fallback ใช้ค่าจาก sheet
+            return d.hours + (d.minutes / 60);
+        });
+
+        // คำนวณค่าช่วงเวลาสำหรับ Floating Bar Chart
+        // ✅ แก้ bug: ใช้ threshold >= 18 (6 โมงเย็น) แทน >= 12 (เที่ยงวัน)
         const floatingSleepData = filtered.map(d => {
             let bedParsed = parseSheetsTime(d.rawBed);
             let wakeParsed = parseSheetsTime(d.rawWake);
-            
+
             if (!bedParsed || !wakeParsed) return [0, 0];
 
             let bedVal = bedParsed.h + (bedParsed.m / 60);
             let wakeVal = wakeParsed.h + (wakeParsed.m / 60);
 
-            // ปรับสเกลให้แสดงผลต่อเนื่องกรณีข้ามคืน: ถ้าเข้านอนช่วงค่ำ/ดึก (>= 12) หรือเช้ามืด
-            if (bedVal >= 12) {
-                bedVal = bedVal - 24; // แปลง 23:00 เป็น -1, 22:00 เป็น -2 เพื่อเรียงลำดับจากดึกไปเช้า
+            // ถ้าเข้านอนตั้งแต่ 18:00 เป็นต้นไป ให้ shift เป็นค่าลบ
+            // 23:00 → -1, 22:00 → -2, 18:00 → -6
+            if (bedVal >= 18) {
+                bedVal = bedVal - 24;
             }
-            // ถ้าตื่นนอนหลังจากนอนข้ามคืนมา
-            if (wakeVal < bedVal) {
+
+            // ถ้าเวลาตื่นน้อยกว่าหรือเท่ากับเวลานอน แสดงว่าข้ามคืน
+            if (wakeVal <= bedVal) {
                 wakeVal += 24;
             }
 
             return [bedVal, wakeVal];
         });
 
-        const avgS = sleepHours.reduce((a,b) => a+b, 0) / sleepHours.length;
-        const avgH = heartRates.reduce((a,b) => a+b, 0) / heartRates.length;
-        
+        const avgS = sleepHours.reduce((a, b) => a + b, 0) / sleepHours.length;
+        const avgH = heartRates.reduce((a, b) => a + b, 0) / heartRates.length;
+
         document.getElementById('avgSleep').innerText = avgS.toFixed(1) + " ชม.";
         document.getElementById('avgHR').innerText = Math.round(avgH) + " BPM";
 
         let analysis = `คุณฟิล์มนอนเฉลี่ย ${avgS.toFixed(1)} ชม. `;
-        analysis += avgS >= 7 ? "อยู่ในเกณฑ์ดีครับ!" : "ควรหาเวลานอนเพิ่มนะครับ";
+        analysis += avgS >= 7 ? "อยู่ในเกณฑ์ดีครับ! 👍" : "ควรหาเวลานอนเพิ่มนะครับ 😴";
         document.getElementById('analysisText').innerText = analysis;
 
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         const gridColor = isDark ? '#334155' : '#e2e8f0';
         const textColor = isDark ? '#94a3b8' : '#64748b';
 
-        // วาดกราฟ 1: Floating Bar Chart
+        // กราฟ 1: Floating Bar Chart (ช่วงเวลานอน)
         renderFloatingChart('sleepChart', labels, floatingSleepData, gridColor, textColor);
-        
-        // วาดกราฟ 2: Heart Rate Line Chart
+
+        // กราฟ 2: Bar Chart จำนวนชั่วโมงนอน (ใหม่)
+        renderHoursChart('hoursChart', labels, sleepHours, gridColor, textColor);
+
+        // กราฟ 3: Heart Rate Line Chart
         const minHR = Math.min(...heartRates);
         const maxHR = Math.max(...heartRates);
         renderLineChart('hrChart', labels, heartRates, '#f43f5e', minHR - 5, maxHR + 5, gridColor, textColor);
     }
 
-    // ฟังก์ชันวาดกราฟแท่งแบบช่วงเวลา (Floating Bar Chart)
+    // กราฟแท่งแบบช่วงเวลา (Floating Bar Chart)
     function renderFloatingChart(id, labels, data, gridColor, textColor) {
         const ctx = document.getElementById(id);
         if (sleepChartInstance) sleepChartInstance.destroy();
@@ -400,9 +428,12 @@
                 scales: {
                     x: { grid: { color: gridColor }, ticks: { color: textColor } },
                     y: {
+                        min: -6,   // 18:00
+                        max: 12,   // 12:00 เที่ยงวัน
                         grid: { color: gridColor },
                         ticks: {
                             color: textColor,
+                            stepSize: 1,
                             callback: function(value) {
                                 let actual = value < 0 ? value + 24 : value;
                                 if (actual >= 24) actual -= 24;
@@ -415,7 +446,83 @@
         });
     }
 
-    // ฟังก์ชันวาดกราฟเส้น Heart Rate
+    // ✅ กราฟใหม่: Bar Chart จำนวนชั่วโมงนอน
+    function renderHoursChart(id, labels, data, gridColor, textColor) {
+        const ctx = document.getElementById(id);
+        if (hoursChartInstance) hoursChartInstance.destroy();
+
+        // เส้นอ้างอิง 7 ชั่วโมง (เกณฑ์แนะนำ)
+        const recommended = 7;
+
+        hoursChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'ชั่วโมงนอน',
+                    data: data,
+                    backgroundColor: data.map(h => h >= recommended ? '#22c55e99' : '#f59e0b99'),
+                    borderColor: data.map(h => h >= recommended ? '#22c55e' : '#f59e0b'),
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.raw;
+                                const h = Math.floor(val);
+                                const m = Math.round((val % 1) * 60);
+                                return `นอน ${h} ชม. ${m} นาที`;
+                            }
+                        }
+                    },
+                    // เส้นอ้างอิง 7 ชม. วาดด้วย annotation plugin ไม่ได้ติดตั้ง → ใช้ afterDraw แทน
+                },
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: textColor } },
+                    y: {
+                        min: 0,
+                        max: 12,
+                        grid: { color: gridColor },
+                        ticks: {
+                            color: textColor,
+                            stepSize: 1,
+                            callback: v => v + ' ชม.'
+                        }
+                    }
+                }
+            },
+            plugins: [{
+                // วาดเส้นประ 7 ชม. เป็น reference line
+                id: 'recommendedLine',
+                afterDraw(chart) {
+                    const { ctx, scales: { x, y } } = chart;
+                    const yPos = y.getPixelForValue(recommended);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 4]);
+                    ctx.strokeStyle = '#6366f1';
+                    ctx.lineWidth = 1.5;
+                    ctx.moveTo(x.left, yPos);
+                    ctx.lineTo(x.right, yPos);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#6366f1';
+                    ctx.font = '11px Inter, sans-serif';
+                    ctx.fillText('เป้าหมาย 7 ชม.', x.right - 85, yPos - 5);
+                    ctx.restore();
+                }
+            }]
+        });
+    }
+
+    // กราฟเส้น Heart Rate
     function renderLineChart(id, labels, data, color, minGrad, maxGrad, gridColor, textColor) {
         const ctx = document.getElementById(id);
         if (hrChartInstance) hrChartInstance.destroy();
@@ -424,21 +531,21 @@
             type: 'line',
             data: {
                 labels,
-                datasets: [{ 
+                datasets: [{
                     data, borderColor: color, backgroundColor: color + '22',
                     fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: color
                 }]
             },
-            options: { 
-                maintainAspectRatio: false, 
+            options: {
+                maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
-                scales: { 
+                scales: {
                     x: { grid: { color: gridColor }, ticks: { color: textColor } },
-                    y: { 
+                    y: {
                         min: minGrad, max: maxGrad,
                         ticks: { stepSize: 2, color: textColor },
                         grid: { color: gridColor }
-                    } 
+                    }
                 }
             }
         });
