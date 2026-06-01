@@ -246,17 +246,33 @@
     function parseSheetsTime(rawVal) {
         if (!rawVal) return null;
         let str = String(rawVal).trim();
-        if (str.includes('T')) str = str.split('T')[1].substring(0, 5);
-        else if (str.includes(' ') && (str.includes('-') || str.includes('/'))) {
-            let parts = str.split(' ');
-            if (parts[1]) str = parts[1].substring(0, 5);
+
+        // Google Sheets ส่งมาเป็น ISO timestamp ปี 1899 เช่น "1899-12-29T18:35:56.000Z"
+        // อ่าน UTC hour/minute แล้วบวก +7 (timezone ไทย)
+        if (str.includes('T') && str.endsWith('Z')) {
+            let d = new Date(str);
+            let h = (d.getUTCHours() + 7) % 24;
+            let m = d.getUTCMinutes();
+            return { h, m, totalMins: h * 60 + m };
         }
+
+        // ISO ไม่มี Z เช่น "1899-12-29T18:35:56"
+        if (str.includes('T')) {
+            let timePart = str.split('T')[1].substring(0, 5);
+            let tokens = timePart.split(':');
+            let h = (parseInt(tokens[0], 10) + 7) % 24;
+            let m = parseInt(tokens[1], 10);
+            if (!isNaN(h) && !isNaN(m)) return { h, m, totalMins: h * 60 + m };
+        }
+
+        // "HH:MM" ธรรมดา
         if (str.includes(':')) {
             let tokens = str.split(':');
             let h = parseInt(tokens[0], 10);
             let m = parseInt(tokens[1], 10);
             if (!isNaN(h) && !isNaN(m)) return { h, m, totalMins: h * 60 + m };
         }
+
         return null;
     }
 
@@ -430,6 +446,7 @@
                     y: {
                         min: -6,   // 18:00
                         max: 12,   // 12:00 เที่ยงวัน
+                        reverse: true,  // ให้ดึก (18:00) อยู่บน, เช้า (12:00) อยู่ล่าง
                         grid: { color: gridColor },
                         ticks: {
                             color: textColor,
